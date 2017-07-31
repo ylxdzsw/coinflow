@@ -1,15 +1,16 @@
 fs    = require 'fs'
 util  = require 'util'
+http  = require 'http'
 redis = require 'redis'
 
+dir   = "/var/piggy"
 db    = redis.createClient db: 1
 sleep = util.promisify setTimeout
 
-rediserr = (err) -> throw err if err?
+throwerr = (err) -> throw err if err?
 
-module.exports = class PiggySensor
+module.exports = class Piggy
     constructor: (@name, @debug=false) ->
-        @logfile = fs.createWriteStream "/var/piggy/#{@name}.log", flags: 'a'
         do @startHeartbeating
 
     stderr: (prefix, msg) ->
@@ -19,13 +20,31 @@ module.exports = class PiggySensor
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARNING", msg
 
-    alignInterval: (time, f) ->
-        time *= 1000
+    get: (url) ->
+        new Promise (resolve, reject) ->
+            http.get url, (res) ->
+                if res.statusCode isnt 200
+                    do res.resume # consume response data to free up memory
+                    return reject new Error "Request failed with status #{res.statusCode}"
+
+                data = ""
+                res.setEncoding 'utf8'
+                res.on 'data', (chunk) -> data += chunk
+                res.on 'end', ->
+                    try
+                        resolve JSON.parse data
+                    catch e
+                        reject new Error "Request failed with invalid JSON response #{data}"
+            .on 'error', reject
+
+    alignInterval: (sec, f) ->
+        time = sec * 1000
         now = Date.now()
         n = now // time
 
         await sleep time * (n+1) - now
-        @alignInterval time, f if f n isnt false
+        shouldContinue = f n
+        @alignInterval sec, f if shouldContinue isnt false
 
     startHeartbeating: ->
         @alignInterval 20, (n) =>
@@ -73,8 +92,8 @@ module.exports = class PiggySensor
         db.multi()
             .lpush "sensor/#{@name}.#{currency}.candles", candle
             .ltrim "sensor/#{@name}.#{currency}.candles", 0, 255
-            .exec rediserr
-        @logfile.write candle + '\n'
+            .exec throwerr
+        fs.appendFile "#{dir}/#{@name}.#{currency}.candles.json", candle + '\n', throwerr
         @notify "channel/#{@name}.#{currency}.candle"
 
     aggregateTrades: (trades) ->
