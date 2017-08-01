@@ -7,7 +7,7 @@ dir   = "/var/piggy"
 db    = redis.createClient db: 1
 sleep = util.promisify setTimeout
 
-throwerr = (err) -> throw err if err?
+throwerr = (err) -> console.error err if err?
 
 module.exports = class Piggy
     constructor: (@name, @debug=false) ->
@@ -57,6 +57,7 @@ module.exports = class Piggy
 
     createCandle: (trades, n) ->
         nt = trades.length
+        return if nt is 0
         trades = @aggregateTrades trades
 
         # first pass: mean and volumn
@@ -90,11 +91,19 @@ module.exports = class Piggy
     saveCandle: (candle, currency) ->
         candle = JSON.stringify candle
         db.multi()
-            .lpush "sensor/#{@name}.#{currency}.candles", candle
-            .ltrim "sensor/#{@name}.#{currency}.candles", 0, 255
+            .lpush "sensor/#{@name}.#{currency}.candle", candle
+            .ltrim "sensor/#{@name}.#{currency}.candle", 0, 255
             .exec throwerr
         fs.appendFile "#{dir}/#{@name}.#{currency}.candles.json", candle + '\n', throwerr
         @notify "channel/#{@name}.#{currency}.candle"
+
+    saveDepth: (asks, bids, currency) ->
+        db.multi()
+            .set "sensor/#{@name}.#{currency}.depth.ask", JSON.stringify asks
+            .set "sensor/#{@name}.#{currency}.depth.bid", JSON.stringify bids
+            .set "sensor/#{@name}.#{currency}.depth.fresh", "", 'EX', 10 # expire 10 sec
+            .exec throwerr
+        @notify "channel/#{@name}.#{currency}.depth"
 
     aggregateTrades: (trades) ->
         trades.sort (x,y) -> x.price - y.price
