@@ -16,7 +16,7 @@ end
 
 @main function start(service="sensors")
     if service == "sensors"
-        @sync for file in ("chbtc.coffee", "okcoin.coffee", "huobi.coffee", "btctrade.coffee")
+        @sync for file in ("chbtc.coffee", "okcoin.coffee", "huobi.coffee", "btctrade.coffee", "jubi.coffee")
             @async run(`coffee sensor/$file`)
         end
     else
