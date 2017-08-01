@@ -20,12 +20,18 @@ module.exports = class Piggy
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARNING", msg
 
-    get: (url) ->
-        new Promise (resolve, reject) ->
-            http.get url, (res) ->
+    get: (url, attempt=3) ->
+        new Promise (resolve, reject) =>
+            http.get url, (res) =>
                 if res.statusCode isnt 200
                     do res.resume # consume response data to free up memory
-                    return reject new Error "Request failed with status #{res.statusCode}"
+                    return if attempt > 0
+                        @info "Request failed with status #{res.statusCode}, retrying"
+                        @get url, attempt - 1
+                            .then resolve
+                            .catch reject
+                    else
+                        reject new Error "Request failed with status #{res.statusCode}"
 
                 data = ""
                 res.setEncoding 'utf8'
@@ -34,8 +40,21 @@ module.exports = class Piggy
                     try
                         resolve JSON.parse data
                     catch e
-                        reject new Error "Request failed with invalid JSON response #{data}"
-            .on 'error', reject
+                        if attempt > 0
+                            @info "Request failed with invalid JSON response, retrying"
+                            @get url, attempt - 1
+                                .then resolve
+                                .catch reject
+                        else
+                            reject new Error "Request failed with invalid JSON response #{data}"
+            .on 'error', (e) ->
+                if attempt > 0
+                    @info "request failed: e.message, retrying"
+                    @get url, attempt - 1
+                        .then resolve
+                        .catch reject
+                else
+                    reject e
 
     alignInterval: (sec, f) ->
         time = sec * 1000
