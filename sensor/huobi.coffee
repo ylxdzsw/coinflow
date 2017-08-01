@@ -34,13 +34,15 @@ oldurl = (x) -> "http://api.huobi.com/staticmarket/detail_#{x}_json.js"
 pg.alignInterval 2, ->
     oldupdate currency for currency in ['btc', 'ltc']
 
+parseDepth = ({price, amount}) -> [price, amount]
+
 oldupdate = (currency) ->
     data = await pg.get oldurl currency
     for trade in data.trades
         if trade.id not in ids[currency]
             ids[currency].push trade.id
             trades[currency].push trade
-    pg.saveDepth data.sells, data.buys, currency
+    pg.saveDepth data.sells.map(parseDepth), data.buys.map(parseDepth), currency
 
 # == common logic == #
 

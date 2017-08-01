@@ -115,6 +115,8 @@ module.exports = class Piggy
         @notify "channel/#{@name}.#{currency}.candle"
 
     saveDepth: (asks, bids, currency) ->
+        asks.sort ([p1], [p2]) -> p1 - p2
+        bids.sort ([p1], [p2]) -> p2 - p1
         db.multi()
             .set "sensor/#{@name}.#{currency}.depth.ask", JSON.stringify asks
             .set "sensor/#{@name}.#{currency}.depth.bid", JSON.stringify bids

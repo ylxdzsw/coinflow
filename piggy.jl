@@ -10,13 +10,13 @@ const conn = RedisConnection(db=1)
     exec(conn, "flushdb")
     for line in eachline(conf)
         key, value = strip.(split(line, '='))
-        exec(conn, "set", key, value)
+        exec(conn, "set", "config/$key", value)
     end
 end
 
 @main function start(service="sensors")
     if service == "sensors"
-        @sync for file in ("chbtc.coffee", "okcoin.coffee", "huobi.coffee")
+        @sync for file in ("chbtc.coffee", "okcoin.coffee", "huobi.coffee", "btctrade.coffee")
             @async run(`coffee sensor/$file`)
         end
     else
