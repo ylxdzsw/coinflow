@@ -14,6 +14,12 @@ const conn = RedisConnection(db=1)
     end
 end
 
-@main function start(service="sensor")
+@main function start(service="sensors")
+    if service == "sensors"
+        @sync for file in ("chbtc.coffee", "okcoin.coffee", "huobi.coffee")
+            @async run(`coffee sensor/$file`)
+        end
+    else
 
+    end
 end

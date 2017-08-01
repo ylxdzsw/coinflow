@@ -1,6 +1,7 @@
 fs    = require 'fs'
 util  = require 'util'
 http  = require 'http'
+https = require 'https'
 redis = require 'redis'
 
 dir   = "/var/piggy"
@@ -20,16 +21,19 @@ module.exports = class Piggy
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARNING", msg
 
-    get: (url, attempt=3) ->
+    get: (url, attempt=3, proto=if url.startsWith 'https' then https else http) ->
         new Promise (resolve, reject) =>
-            http.get url, (res) =>
+            retry = (msg) =>
+                @info msg
+                @get url, attempt - 1, proto
+                    .then resolve
+                    .catch reject
+
+            proto.get url, (res) =>
                 if res.statusCode isnt 200
                     do res.resume # consume response data to free up memory
                     return if attempt > 0
-                        @info "Request failed with status #{res.statusCode}, retrying"
-                        @get url, attempt - 1
-                            .then resolve
-                            .catch reject
+                        retry "Request failed with status #{res.statusCode}, retrying"
                     else
                         reject new Error "Request failed with status #{res.statusCode}"
 
@@ -41,27 +45,21 @@ module.exports = class Piggy
                         resolve JSON.parse data
                     catch e
                         if attempt > 0
-                            @info "Request failed with invalid JSON response, retrying"
-                            @get url, attempt - 1
-                                .then resolve
-                                .catch reject
+                            retry "Request failed with invalid JSON response, retrying"
                         else
                             reject new Error "Request failed with invalid JSON response #{data}"
             .on 'error', (e) ->
                 if attempt > 0
-                    @info "request failed: e.message, retrying"
-                    @get url, attempt - 1
-                        .then resolve
-                        .catch reject
+                    retry "request failed: #{e.message}, retrying"
                 else
                     reject e
 
     alignInterval: (sec, f) ->
         time = sec * 1000
         now = Date.now()
-        n = now // time
+        n = now // time + 1
 
-        await sleep time * (n+1) - now
+        await sleep time * n - now
         shouldContinue = f n
         @alignInterval sec, f if shouldContinue isnt false
 
