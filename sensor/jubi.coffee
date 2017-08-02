@@ -19,7 +19,13 @@ pg.alignInterval 2, ->
     updateDepth currency for currency in ['btc', 'ltc', 'etc', 'eth']
 
 updateDepth = (currency) ->
-    data = await pg.get url "/depth?coin=#{currency}"
+    try
+        data = await pg.get url "/depth?coin=#{currency}"
+    catch e
+        if e.message.includes 204 # ignore 204 which indicates no update
+            return
+        else
+            throw e
     pg.saveDepth data.asks, data.bids, currency
 
 pg.alignInterval 300, (n) ->

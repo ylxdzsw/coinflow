@@ -32,9 +32,12 @@ module.exports = class Piggy
             proto.get url, (res) =>
                 if res.statusCode isnt 200
                     do res.resume # consume response data to free up memory
-                    return if attempt > 0
+                    return if res.statusCode is 204
+                        reject new Error "#{url} responses #{res.statusCode}"
+                    else if attempt > 0
                         retry "Request failed with status #{res.statusCode}, retrying"
                     else
+                        @warn "request to #{url} failed 3 times, giving up"
                         reject new Error "Request failed with status #{res.statusCode}"
 
                 data = ""
@@ -47,6 +50,7 @@ module.exports = class Piggy
                         if attempt > 0
                             retry "Request failed with invalid JSON response, retrying"
                         else
+                            @warn "request to #{url} failed 3 times, giving up"
                             reject new Error "Request failed with invalid JSON response #{data}"
             .on 'error', (e) =>
                 if attempt > 0
