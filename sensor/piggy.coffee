@@ -48,10 +48,11 @@ module.exports = class Piggy
                             retry "Request failed with invalid JSON response, retrying"
                         else
                             reject new Error "Request failed with invalid JSON response #{data}"
-            .on 'error', (e) ->
+            .on 'error', (e) =>
                 if attempt > 0
                     retry "request failed: #{e.message}, retrying"
                 else
+                    @warn "request to #{url} failed 3 times, giving up"
                     reject e
 
     alignInterval: (sec, f) ->
