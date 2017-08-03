@@ -11,15 +11,14 @@ sleep = util.promisify setTimeout
 throwerr = (err) -> console.error err if err?
 
 module.exports = class Piggy
-    constructor: (@name, @debug=false) ->
+    constructor: (@name) ->
         do @startHeartbeating
 
     stderr: (prefix, msg) ->
         console.error "#{prefix}:", (new Date).toLocaleTimeString(), msg
 
-    log: (msg) -> @stderr "LOG", msg if @debug
     info: (msg) -> @stderr "INFO", msg
-    warn: (msg) -> @stderr "WARNING", msg
+    warn: (msg) -> @stderr "WARN", msg
 
     get: (url, attempt=2, proto=if url.startsWith 'https' then https else http) ->
         new Promise (resolve, reject) =>

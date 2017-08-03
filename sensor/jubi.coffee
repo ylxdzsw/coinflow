@@ -6,14 +6,14 @@ trades = btc: [], ltc: [], etc: [], eth: []
 
 url = (x) -> "https://www.jubi.com/api/v1" + x
 
-for currency, i in ['btc', 'ltc', 'etc', 'eth']
+['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
     pg.alignInterval 5, i, ->
         for trade in await pg.get url "/orders?coin=#{currency}"
             if trade.tid not in ids[currency]
                 ids[currency].push trade.tid
                 trades[currency].push trade
 
-for currency, i in ['btc', 'ltc', 'etc', 'eth']
+['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
     pg.alignInterval 2, .5*i, ->
         try
             data = await pg.get url "/depth?coin=#{currency}"
