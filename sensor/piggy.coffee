@@ -21,7 +21,7 @@ module.exports = class Piggy
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARNING", msg
 
-    get: (url, attempt=3, proto=if url.startsWith 'https' then https else http) ->
+    get: (url, attempt=2, proto=if url.startsWith 'https' then https else http) ->
         new Promise (resolve, reject) =>
             retry = (msg) =>
                 @info msg
@@ -59,17 +59,17 @@ module.exports = class Piggy
                     @warn "request to #{url} failed 3 times, giving up"
                     reject e
 
-    alignInterval: (sec, f) ->
+    alignInterval: (sec, phase, f) ->
         time = sec * 1000
-        now = Date.now()
+        now = Date.now() - phase * 1000
         n = now // time + 1
 
         await sleep time * n - now
         shouldContinue = f n
-        @alignInterval sec, f if shouldContinue isnt false
+        @alignInterval sec, phase, f if shouldContinue isnt false
 
     startHeartbeating: ->
-        @alignInterval 20, (n) =>
+        @alignInterval 20, 0, (n) =>
             db.set "status/#{@name}.alive", n, 'EX', 25
 
     notify: do ->
