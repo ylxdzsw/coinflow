@@ -15,7 +15,7 @@ const wechat_channel = RedisCondition("channel/wechat.msg")
 
 function notify_wechat(currency, buy, sell, p, q, ask, bid, f, profit, profit_rate)
     p, ask, bid, f, profit = round.((p, ask, bid, f, profit), 2)
-    q, profit_rate = round.((q, profit_rate), 5)
+    q, profit_rate = round.((q, profit_rate), 4)
     total = round(profit / profit_rate, 2)
     msg = "发现交易机会：从 $buy 以 $ask 的价格购买 $q $currency, 在 $sell 以 $bid 的价格卖出，总收益 $p，总手续费 $f，利润 $profit，动用资金 $total，利润率 $profit_rate"
     notify(wechat_channel, msg)
@@ -29,16 +29,20 @@ end
                 buy, sell = chance
                 trades = calc_profit(currency, buy, sell)
 
-                if !isempty(trades)
-                    best = findmax(i" 6".(trades))
-                else
+                if isempty(trades)
                     continue
+                else
+                    best = findmax(i" 6".(trades))
                 end
 
                 if car(best) < 0
                     continue
                 else
                     best = trades[cadr(best)]
+                end
+
+                if best[end] < 0.001 # min profit rate
+                    continue
                 end
 
                 notify_wechat(currency, buy, sell, best...)
