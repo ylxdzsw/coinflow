@@ -20,25 +20,14 @@ else
     FixedFee(0.)
 end for exchange in exchange_list for coin in (coin_list..., "cny") for op in ("make", "take", "draw"))
 
-function seek_chance(currency)
-    exs = []
+function chance_direction(currency, a, b)
+    aska = RedisString("sensor/$a.$currency.depth.ask")[] |> JSON.parse |> car |> car
+    bida = RedisString("sensor/$a.$currency.depth.bid")[] |> JSON.parse |> car |> car
+    askb = RedisString("sensor/$b.$currency.depth.ask")[] |> JSON.parse |> car |> car
+    bidb = RedisString("sensor/$b.$currency.depth.bid")[] |> JSON.parse |> car |> car
 
-    for ex in exchange_list
-        candle = SafeRedisList{String}("sensor/$ex.$currency.candle")[1]
-        if !isnull(candle)
-            candle = JSON.parse(get(candle))
-            push!(exs, (ex, candle["q"][2], candle["q"][4]))
-        end
-    end
-
-    seller = max(exs..., by=i"2")
-    buyer  = min(exs..., by=i"3")
-
-    if buyer[3] < seller[2]
-        car(buyer), car(seller)
-    else
-        nothing
-    end
+    aska < bidb ? 1 :
+    askb < bida ? -1 : 0
 end
 
 # `buy` and `sell` are exchanges where we will buy or sell coins
