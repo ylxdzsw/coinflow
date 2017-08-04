@@ -1,4 +1,9 @@
-#display ask1 and bid1
+using OhMyJulia
+using RedisAlchemy
+using JSON
+
+set_default_redis_connection(RedisConnectionPool(db=1))
+
 while true
     buffer = IOBuffer()
     println(buffer, "\n\t   ", now())
