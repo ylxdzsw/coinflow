@@ -50,7 +50,12 @@ end
                         direction < 0 ? (b, a) :
                         (cancel_chance(chance); continue)
 
-            trades = calc_profit(currency, buy, sell)
+            trades = try
+                calc_profit(currency, buy, sell)
+            catch e
+                warn << e
+                continue
+            end
 
             if isempty(trades)
                 cancel_chance(chance)
