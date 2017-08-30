@@ -15,7 +15,8 @@ module.exports = class Piggy
         do @startHeartbeating
 
     stderr: (prefix, msg) ->
-        console.error "#{prefix}:", (new Date).toLocaleTimeString()[0...8], msg
+        time = (new Date).toISOString().match(/T(.*)\./)[1]
+        console.error "#{prefix}:", time, msg
 
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARN", msg
@@ -152,6 +153,20 @@ module.exports = class Piggy
             db.get "sensor/#{@name}.#{currency}.lastsync.id", (err, data) ->
                 if err? then reject err else resolve data
 
-    candleTime: (time=Date.now()//1000) -> time // 300 - 5000000
+    candleTime: (time=Date.now()) ->
+        switch
+            when time > 1000000000000 # micro sec
+                time // 300000 - 5000000
+            when time < 10000000 # candle
+                time
+            else # sec
+                time // 300 - 5000000
 
-    secondTime: (n) -> if n? then 300 * (n + 5000000) else Date.now() // 1000
+    secondTime: (n=Date.now()) ->
+        switch
+            when n > 1000000000000 # micro sec
+                n // 1000
+            when n < 10000000 # candle
+                300 * (n + 5000000)
+            else # sec
+                n

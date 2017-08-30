@@ -8,7 +8,7 @@ trades = btc: [], ltc: [], etc: [], eth: [] # all trades after candle time
 url = (x) -> "http://api.chbtc.com/data/v1" + x
 
 ['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
-    pg.alignInterval 10, 2*i, ->
+    pg.alignInterval 5, i, ->
         batch = await pg.get url "/trades?currency=#{currency}_cny"
 
         if not lastid[currency]?
@@ -40,7 +40,6 @@ url = (x) -> "http://api.chbtc.com/data/v1" + x
         period = pg.secondTime candle[currency] + 1
 
         if (batch.some (x) -> x.date >= period)
-            console.log "try new candle #{currency}"
             candleTrades = trades[currency].filter (x) -> pg.candleTime(x.date) is candle[currency]
 
             if candleTrades.length > 0
