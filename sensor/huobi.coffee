@@ -131,7 +131,8 @@ ws =
             return if batch.length is 0
         else
             pg.warn "huobi #{currency} #{candle[currency]} some data lost"
-            candle[currency] += 1
+            lowest = (batch.sort (x,y) -> x.id - y.id)[0]
+            candle[currency] = 1 + pg.candleTime lowest.ts
 
         trades[currency] = trades[currency].concat batch
         lastid[currency] = (x.id for x in batch).sort().pop()

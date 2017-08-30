@@ -15,8 +15,9 @@ module.exports = class Piggy
         do @startHeartbeating
 
     stderr: (prefix, msg) ->
-        time = (new Date).toISOString().match(/T(.*)\./)[1]
-        console.error "#{prefix}:", time, msg
+        time = (new Date).toISOString().match(/(.*)T(.*)\./)
+        fs.appendFile "#{dir}/sensor.log", "#{prefix}: #{time[1]} #{time[2]} #{msg}\n", throwerr
+        console.error "#{prefix}:", time[2], msg
 
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARN", msg
@@ -24,7 +25,7 @@ module.exports = class Piggy
     get: (url, attempt=2, proto=if url.startsWith 'https' then https else http) ->
         new Promise (resolve, reject) =>
             retry = (msg) =>
-                @info msg
+                # @info msg
                 await sleep 200
                 @get url, attempt - 1, proto
                     .then resolve
@@ -155,18 +156,18 @@ module.exports = class Piggy
 
     candleTime: (time=Date.now()) ->
         switch
-            when time > 1000000000000 # micro sec
+            when time > 10000000000 # micro sec
                 time // 300000 - 5000000
-            when time < 10000000 # candle
-                time
+            when time < 100000000 # candle
+                +time
             else # sec
                 time // 300 - 5000000
 
     secondTime: (n=Date.now()) ->
         switch
-            when n > 1000000000000 # micro sec
+            when n > 10000000000 # micro sec
                 n // 1000
-            when n < 10000000 # candle
+            when n < 100000000 # candle
                 300 * (n + 5000000)
             else # sec
-                n
+                +n

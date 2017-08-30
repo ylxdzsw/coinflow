@@ -9,7 +9,10 @@ url = (x) -> "http://api.chbtc.com/data/v1" + x
 
 ['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
     pg.alignInterval 5, i, ->
-        batch = await pg.get url "/trades?currency=#{currency}_cny"
+        try
+            batch = await pg.get url "/trades?currency=#{currency}_cny"
+        catch e
+            return pg.warn e.message
 
         if not lastid[currency]?
             lowest = (batch.sort (x,y) -> x.tid - y.tid)[0]
@@ -32,7 +35,8 @@ url = (x) -> "http://api.chbtc.com/data/v1" + x
             return if batch.length is 0
         else
             pg.warn "chbtc #{currency} #{candle[currency]} some data lost"
-            candle[currency] += 1
+            lowest = (batch.sort (x,y) -> x.tid - y.tid)[0]
+            candle[currency] = 1 + pg.candleTime lowest.date
 
         trades[currency] = trades[currency].concat batch
         lastid[currency] = (x.tid for x in batch).sort().pop()
@@ -52,5 +56,9 @@ url = (x) -> "http://api.chbtc.com/data/v1" + x
 
 ['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
     pg.alignInterval 2, .5*i, ->
-        data = await pg.get url "/depth?currency=#{currency}_cny&size=50"
+        try
+            data = await pg.get url "/depth?currency=#{currency}_cny&size=50"
+        catch e
+            return pg.warn e.message
+
         pg.saveDepth currency, data.asks, data.bids
