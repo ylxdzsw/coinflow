@@ -1,3 +1,6 @@
+# btctrade support query history trades
+# we will fill all candles from last sync
+
 PiggySensor = require './piggy'
 pg = new PiggySensor 'btctrade'
 
@@ -20,7 +23,7 @@ parseFloat2 = (x) -> x.map (x) -> x.map (x) -> parseFloat x
         data = await pg.get url "/depth?coin=#{currency}"
         pg.saveDepth parseFloat2(data.asks), parseFloat2(data.bids), currency
 
-pg.alignInterval 300, 0, (n) ->
+pg.alignInterval 300, 0, ->
     for currency in ['btc', 'ltc', 'etc', 'eth']
         candle = pg.createCandle trades[currency], n
         continue if not candle?

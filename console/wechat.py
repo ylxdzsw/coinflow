@@ -7,10 +7,10 @@ def echo(msg):
     if "alive" in msg['Text']:
         return "I'm still alive"
 
-itchat.auto_login(hotReload=True, statusStorageDir="/tmp/piggy.wechat.pkl")
+itchat.auto_login()
 itchat.run(blockThread=False)
 
-room = itchat.search_chatrooms("coineering")[0]["UserName"]
+room = itchat.search_chatrooms("coin")[0]["UserName"]
 
 db = redis.StrictRedis(db=1)
 

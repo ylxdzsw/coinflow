@@ -71,7 +71,7 @@ end
 
             best = trades[cadr(best)]
 
-            if best[end] < 0.0008 # min profit rate
+            if best[end-1] < 5 || best[end] < 0.0008 # min profit and profit rate
                 continue # don't cancel the chance
             end
 

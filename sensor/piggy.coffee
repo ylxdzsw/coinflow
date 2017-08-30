@@ -15,7 +15,7 @@ module.exports = class Piggy
         do @startHeartbeating
 
     stderr: (prefix, msg) ->
-        console.error "#{prefix}:", (new Date).toLocaleTimeString(), msg
+        console.error "#{prefix}:", (new Date).toLocaleTimeString()[0...8], msg
 
     info: (msg) -> @stderr "INFO", msg
     warn: (msg) -> @stderr "WARN", msg
@@ -24,6 +24,7 @@ module.exports = class Piggy
         new Promise (resolve, reject) =>
             retry = (msg) =>
                 @info msg
+                await sleep 200
                 @get url, attempt - 1, proto
                     .then resolve
                     .catch reject
@@ -78,7 +79,6 @@ module.exports = class Piggy
 
     createCandle: (trades, n) ->
         nt = trades.length
-        return if nt is 0
         trades = @aggregateTrades trades
 
         # first pass: mean and volumn
@@ -109,16 +109,16 @@ module.exports = class Piggy
 
         {mean, volumn, variance, q, n, nt}
 
-    saveCandle: (candle, currency) ->
+    saveCandle: (currency, candle) ->
         candle = JSON.stringify candle
         db.multi()
             .lpush "sensor/#{@name}.#{currency}.candle", candle
-            .ltrim "sensor/#{@name}.#{currency}.candle", 0, 255
+            .ltrim "sensor/#{@name}.#{currency}.candle", 0, 2016 # 7 days
             .exec throwerr
         fs.appendFile "#{dir}/#{@name}.#{currency}.candles.json", candle + '\n', throwerr
         @notify "channel/#{@name}.#{currency}.candle"
 
-    saveDepth: (asks, bids, currency) ->
+    saveDepth: (currency, asks, bids) ->
         asks.sort ([p1], [p2]) -> p1 - p2
         bids.sort ([p1], [p2]) -> p2 - p1
         db.multi()
@@ -143,3 +143,15 @@ module.exports = class Piggy
             else
                 result.push amount: trade.amount, price: trade.price
         result
+
+    setLastSync: (currency, info) ->
+        db.set "sensor/#{@name}.#{currency}.lastsync.id", JSON.stringify info
+
+    getLastSync: (currency) ->
+        new Promise (resolve, reject) =>
+            db.get "sensor/#{@name}.#{currency}.lastsync.id", (err, data) ->
+                if err? then reject err else resolve data
+
+    candleTime: (time=Date.now()//1000) -> time // 300 - 5000000
+
+    secondTime: (n) -> if n? then 300 * (n + 5000000) else Date.now() // 1000

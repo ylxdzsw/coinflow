@@ -1,3 +1,6 @@
+# jubi didn't describe `since` parameter in their document, but it support it just like btctrade
+# actually all elements like SMS verification etc. is the same as btctrade, I guess one site is a fork of the other
+
 PiggySensor = require './piggy'
 pg = new PiggySensor 'jubi'
 
