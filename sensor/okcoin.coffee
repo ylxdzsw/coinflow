@@ -7,8 +7,8 @@ trades = btc: [], ltc: [], eth: [] # all trades after candle time
 
 url = (x) -> "https://www.okcoin.cn/api/v1" + x
 
-['btc', 'ltc', 'eth'].forEach (currency, i) ->
-    pg.alignInterval 20, i, ->
+[['btc', 4, 0], ['ltc', 2, 0], ['eth', 8, 1]].forEach ([currency, interval, phrase]) ->
+    pg.alignInterval interval, phrase, ->
         try
             batch = await pg.get url "/trades.do?symbol=#{currency}_cny"
         catch e
@@ -36,7 +36,7 @@ url = (x) -> "https://www.okcoin.cn/api/v1" + x
         else
             pg.warn "okcoin #{currency} #{candle[currency]} some data lost"
             lowest = (batch.sort (x,y) -> x.tid - y.tid)[0]
-            candle[currency] = 1 + pg.candleTime lowest.data
+            candle[currency] = 1 + pg.candleTime lowest.date
 
         trades[currency] = trades[currency].concat batch
         lastid[currency] = (x.tid for x in batch).sort().pop()

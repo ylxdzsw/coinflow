@@ -8,7 +8,7 @@ trades = btc: [], ltc: [], etc: [], eth: [] # all trades after candle time
 url = (x) -> "http://api.chbtc.com/data/v1" + x
 
 ['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
-    pg.alignInterval 5, i, ->
+    pg.alignInterval 4, i, ->
         try
             batch = await pg.get url "/trades?currency=#{currency}_cny"
         catch e

@@ -103,7 +103,7 @@ ws =
                     .catch reject
 
 ['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
-    pg.alignInterval 20, i, ->
+    pg.alignInterval 15, i, ->
         data = await ws.query currency
 
         return pg.warn "huobi responds error: #{JSON.strinify data}" if data.status is 'error'
