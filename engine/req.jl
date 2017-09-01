@@ -2,6 +2,8 @@ using Requests: get, post, statuscode
 using Nettle
 using JSON
 
+const uid = RedisCounter("special/uid")
+
 const chbtc_key   = hexdigest("SHA1", RedisString("config/chbtc.key.private")[])
 const chbtc_token = RedisString("config/chbtc.key.public")[]
 
@@ -49,4 +51,35 @@ function req_okcoin(url, params::Dict)
     sign = hexdigest("MD5", str * "&secret_key=$okcoin_key") |> uppercase
 
     post("https://www.okcoin.cn/api/v1$url?$str&sign=$sign") |> readstring |> JSON.parse
+end
+
+const btctrade_key   = hexdigest("MD5", RedisString("config/btctrade.key.private")[])
+const btctrade_token = RedisString("config/btctrade.key.public")[]
+
+function req_btctrade(url, params::Dict)
+    params["key"] = btctrade_token
+    params["nonce"] = uid[]
+    params["version"] = "2"
+
+    str = join(map(x->"$(x[1])=$(x[2])", collect(params)), '&')
+    sign = hexdigest("SHA256", btctrade_key, str)
+
+    header = Dict("Content-Type" => "application/x-www-form-urlencoded")
+
+    post("https://api.btctrade.com/api$url", headers = header, data = str * "&signature=$sign") |> readstring |> JSON.parse
+end
+
+const jubi_key   = hexdigest("MD5", RedisString("config/jubi.key.private")[])
+const jubi_token = RedisString("config/jubi.key.public")[]
+
+function req_jubi(url, params::Dict)
+    params["key"] = jubi_token
+    params["nonce"] = uid[]
+
+    str = join(map(x->"$(x[1])=$(x[2])", collect(params)), '&')
+    sign = hexdigest("SHA256", jubi_key, str)
+
+    header = Dict("Content-Type" => "application/x-www-form-urlencoded")
+
+    post("https://www.jubi.com/api/v1$url", headers = header, data = str * "&signature=$sign") |> readstring |> JSON.parse
 end

@@ -71,11 +71,23 @@ function get_okcoin_balance()
 end
 
 function get_btctrade_balance()
+    data = req_btctrade("/balance", Dict())
 
+    if !get(data, "result", true)
+        return warn("btctrade returns $data")
+    end
+
+    Dict(coin => (parse(Float64, data["$(coin)_balance"]), parse(Float64, data["$(coin)_reserved"])) for coin in (coin_list..., "cny"))
 end
 
 function get_jubi_balance()
+    data = req_jubi("/balance", Dict())
 
+    if !get(data, "result", true)
+        return warn("jubi returns $data")
+    end
+
+    Dict(coin => (Float64(data["$(coin)_balance"]), Float64(data["$(coin)_lock"])) for coin in (coin_list..., "cny"))
 end
 
 

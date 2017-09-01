@@ -8,7 +8,7 @@ const conn = RedisConnection(db=1)
 
 "flush redis db 1 and import configures from file"
 @main function init(conf="/etc/piggy.conf")
-    exec(conn, "flushdb")
+    # exec(conn, "flushdb")
     for line in eachline(conf) @when !startswith(line, '#') && '=' in line
         key, value = strip.(split(line, '='))
         exec(conn, "set", "config/$key", value)

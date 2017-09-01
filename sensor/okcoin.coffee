@@ -7,7 +7,7 @@ trades = btc: [], ltc: [], eth: [] # all trades after candle time
 
 url = (x) -> "https://www.okcoin.cn/api/v1" + x
 
-[['btc', 4, 0], ['ltc', 2, 0], ['eth', 8, 1]].forEach ([currency, interval, phrase]) ->
+[['btc', 4, 0], ['ltc', 2, 0], ['eth', 4, 1]].forEach ([currency, interval, phrase]) ->
     pg.alignInterval interval, phrase, ->
         try
             batch = await pg.get url "/trades.do?symbol=#{currency}_cny"
