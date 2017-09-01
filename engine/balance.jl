@@ -13,6 +13,8 @@ function sync_balance(exchange, check=true)
            exchange == "jubi"     ? get_jubi_balance() :
            error("unknown exchange $exchange")
 
+    data == nothing && return
+
     for coin in (coin_list..., "cny")
         cash, frozen = data[coin]
         balance[exchange][coin][1] = cash

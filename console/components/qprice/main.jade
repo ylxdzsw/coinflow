@@ -1,0 +1,38 @@
+doctype html
+html(lang="zh_CN")
+    head
+        meta(charset="utf8")
+        meta(http-equiv="X-UA-Compatible",content="IE=edge")
+        script!=require("@nattoppet/jquery.js")
+        script!=require("@nattoppet/plotly.js")
+        title qprice | piggy
+    body
+        script
+            :coffee-script
+                $ ->
+                    colormap = chbtc: '#ff7f00', huobi: '#e41a1c', okcoin: '#377eb8', btctrade: '#4daf4a', jubi: '#984ea3'
+
+                    $.getJSON '/qprice/data', (data) ->
+                        for coin in ['btc', 'ltc', 'etc', 'eth']
+                            traces = []
+
+                            for exchange, info of data[coin]
+                                traces.push
+                                    x: info.n
+                                    y: info.q1
+                                    mode: 'lines'
+                                    line: color: colormap[exchange]
+                                    name: "#{exchange} sell"
+                                traces.push
+                                    x: info.n
+                                    y: info.q3
+                                    mode: 'lines'
+                                    line: color: colormap[exchange], dash: 'dash'
+                                    name: "#{exchange} buy"
+
+                            Plotly.newPlot(coin, traces, title: coin)
+
+        #btc(style="width:1440px; height:800px;")
+        #ltc(style="width:1440px; height:800px;")
+        #etc(style="width:1440px; height:800px;")
+        #eth(style="width:1440px; height:800px;")
