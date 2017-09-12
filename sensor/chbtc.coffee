@@ -11,6 +11,8 @@ url = (x) -> "http://api.chbtc.com/data/v1" + x
     pg.alignInterval 4, i, ->
         try
             batch = await pg.get url "/trades?currency=#{currency}_cny"
+            if not batch? # not sure if we need this
+                throw new Error "fucking undefined"
         catch e
             return pg.warn e.message
 
@@ -44,7 +46,7 @@ url = (x) -> "http://api.chbtc.com/data/v1" + x
         period = pg.secondTime candle[currency] + 1
 
         if (batch.some (x) -> x.date >= period)
-            candleTrades = trades[currency].filter (x) -> pg.candleTime(x.date) is candle[currency]
+            candleTrades = (price: parseFloat(price), amount: parseFloat(amount), tid: tid for {price, amount, date, tid} in trades[currency] when pg.candleTime(date) is candle[currency])
 
             if candleTrades.length > 0
                 latest = (x.tid for x in candleTrades).sort().pop()

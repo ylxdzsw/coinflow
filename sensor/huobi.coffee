@@ -20,6 +20,18 @@ ws =
     wsold: null
     ch: {}
 
+    register: (f) ->
+        id = do getid
+        do =>
+            await sleep 5000
+            if @ch[id]?
+                pg.warn "task #{id} timeout after 5s"
+                delete @ch[id]
+        @ch[id] = (args...) =>
+            delete @ch[id]
+            f(args...)
+        id
+
     init_new: () ->
         sock = new WebSocket('wss://be.huobi.com/ws')
             .on 'message', (data) =>
@@ -29,8 +41,7 @@ ws =
                     when 'ping' of data
                         sock.send JSON.stringify pong: data.ping
                     when 'id' of data
-                        @ch[data.id] data
-                        delete @ch[data.id]
+                        @ch[data.id]? data
                     when 'ch' of data
                         @ch[data.ch] data.tick
                     else
@@ -40,9 +51,8 @@ ws =
                 pg.info "web socket connected: be.huobi.com"
                 @wsnew = sock
                 ['etc', 'eth'].forEach (currency) =>
-                    id = do getid
-                    @wsnew.send JSON.stringify sub: "market.#{currency}cny.depth.step0", id: id
-                    @ch[id] = ({status}) -> pg.warn "subscription failed" if status is 'error'
+                    id = @register ({status}) -> pg.warn "subscription failed" if status is 'error'
+                    sock.send JSON.stringify sub: "market.#{currency}cny.depth.step0", id: id
                     @ch["market.#{currency}cny.depth.step0"] = (data) ->
                         pg.saveDepth currency, data.asks, data.bids
 
@@ -61,8 +71,7 @@ ws =
                     when 'ping' of data
                         sock.send JSON.stringify pong: data.ping
                     when 'id' of data
-                        @ch[data.id] data
-                        delete @ch[data.id]
+                        @ch[data.id]? data
                     when 'ch' of data
                         @ch[data.ch] data.tick
                     else
@@ -72,9 +81,8 @@ ws =
                 pg.info "web socket connected: api.huobi.com"
                 @wsold = sock
                 ['btc', 'ltc'].forEach (currency) =>
-                    id = do getid
+                    id = @register ({status}) -> pg.warn "subscription failed" if status is 'error'
                     sock.send JSON.stringify sub: "market.#{currency}cny.depth.step0", id: id
-                    @ch[id] = ({status}) -> pg.warn "subscription failed" if status is 'error'
                     @ch["market.#{currency}cny.depth.step0"] = (data) ->
                         pg.saveDepth currency, data.asks, data.bids
 
@@ -93,9 +101,8 @@ ws =
             sock = if currency in ['etc', 'eth'] then @wsnew else @wsold
 
             if sock?
-                id = do getid
+                id = @register resolve
                 sock.send JSON.stringify req: "market.#{currency}cny.trade.detail", id: id
-                @ch[id] = resolve
             else
                 await sleep 400
                 @query currency, retry - 1
