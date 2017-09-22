@@ -17,10 +17,8 @@ end
 
 @main function start(service="sensors")
     if startswith("sensors", service)
-        @sync for file in ("chbtc.coffee", "okcoin.coffee", "huobi.coffee", "btctrade.coffee", "jubi.coffee")
+        @sync for file in ("okex.coffee", "huobi.coffee", "bitfinex.coffee")
             @async run(`coffee sensor/$file`)
         end
-    elseif startswith("arbitrage", service)
-        run(`juila arbitrage/main.jl`)
     end
 end
