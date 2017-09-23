@@ -1,64 +1,77 @@
 PiggySensor = require './piggy'
-pg = new PiggySensor 'okcoin'
+WebSocket   = require 'ws'
 
-lastid = {}
-candle = {} # current candle time
-trades = btc: [], ltc: [], eth: [] # all trades after candle time
+util = require 'util'
+sleep = util.promisify setTimeout
 
-url = (x) -> "https://www.okcoin.cn/api/v1" + x
+pg = new PiggySensor 'okex'
 
-[['btc', 4, 0], ['ltc', 2, 0], ['eth', 4, 1]].forEach ([currency, interval, phrase]) ->
-    pg.alignInterval interval, phrase, ->
-        try
-            batch = await pg.get url "/trades.do?symbol=#{currency}_cny"
-        catch e
-            return pg.warn e.message
+okex =
+    init: () ->
+        @kilne = {}
+        @ws = new WebSocket('wss://real.okex.com:10441/websocket')
+            .on 'message', (msg) =>
+                {channel, data} = JSON.parse msg
 
-        if not lastid[currency]?
-            lowest = (batch.sort (x,y) -> x.tid - y.tid)[0]
-            lastSync = await pg.getLastSync currency
+                switch channel
+                    when 'addChannel'
+                        pg.info msg if data.result isnt true
+                    when 'ok_sub_spot_bcc_btc_depth_60'
+                        @update_depth 'bcc_btc', data.asks, data.bids
+                    when 'ok_sub_spot_ltc_btc_depth_60'
+                        @update_depth 'ltc_btc', data.asks, data.bids
+                    when 'ok_sub_spot_eth_btc_depth_60'
+                        @update_depth 'eth_btc', data.asks, data.bids
+                    when 'ok_sub_spot_etc_btc_depth_60'
+                        @update_depth 'etc_btc', data.asks, data.bids
+                    when 'ok_sub_spot_bcc_btc_kline_3min'
+                        @update_kline 'bcc_btc', data
+                    when 'ok_sub_spot_ltc_btc_kline_3min'
+                        @update_kline 'ltc_btc', data
+                    when 'ok_sub_spot_eth_btc_kline_3min'
+                        @update_kline 'eth_btc', data
+                    when 'ok_sub_spot_etc_btc_kline_3min'
+                        @update_kline 'etc_btc', data
+                    else
+                        pg.info "unknown message"
 
-            if lastSync?
-                {id, n} = JSON.parse lastSync
+            .on 'open', () =>
+                pg.info "web socket connected"
+                @connected = true
+                ['bcc_btc','ltc_btc','eth_btc','etc_btc'].forEach (pair) =>
+                    @ws.send JSON.stringify event: 'addChannel', channel: "ok_sub_spot_#{pair}_depth_20"
+                    @ws.send JSON.stringify event: 'addChannel', channel: "ok_sub_spot_#{pair}_kline_3min"
 
-                if lowest.tid <= id + 1
-                    candle[currency] = n + 1
-                    lastid[currency] = id
+            .on 'close', (e) =>
+                pg.info "web socket closed: #{e}, reconnecting"
+                @connected = false
+                await sleep 1000
+                do @init
 
-            if not lastid[currency]?
-                n = pg.candleTime lowest.date
-                candle[currency] = n + 1
-                lastid[currency] = (x.tid for x in batch when pg.candleTime(x.date) is n).sort().pop()
+            .on 'pong', ->
+                @alive = true
 
-        if (batch.some (x) -> x.tid <= lastid[currency])
-            batch = batch.filter (x) -> x.tid > lastid[currency]
-            return if batch.length is 0
-        else
-            pg.warn "okcoin #{currency} #{candle[currency]} some data lost"
-            lowest = (batch.sort (x,y) -> x.tid - y.tid)[0]
-            candle[currency] = 1 + pg.candleTime lowest.date
+    update_depth: (pair, asks, bids) ->
+        return if not @kline[pair]?
 
-        trades[currency] = trades[currency].concat batch
-        lastid[currency] = (x.tid for x in batch).sort().pop()
+        asks = asks.sort (x, y) -> x[0] - y[0]
+        bids = bids.sort (x, y) -> y[0] - x[0]
 
-        period = pg.secondTime candle[currency] + 1
+        k = @kline[pair]
+        i = 0
 
-        if (batch.some (x) -> x.date >= period)
-            candleTrades = (price: parseFloat(price), amount: parseFloat(amount) for {price, amount, date} in trades[currency] when pg.candleTime(date) is candle[currency])
+        while k > asks[i++]
 
-            if candleTrades.length > 0
-                latest = (x.tid for x in candleTrades).sort().pop()
-                pg.saveCandle currency, pg.createCandle candleTrades, candle[currency]
-                pg.setLastSync currency, id: latest, n: candle[currency]
 
-            trades[currency] = trades[currency].filter (x) -> x.date >= period
-            candle[currency] += 1
+    update_kline: (pair, candles) ->
 
-['btc', 'ltc', 'eth'].forEach (currency, i) ->
-    pg.alignInterval 2, .5*i, ->
-        try
-            data = await pg.get url "/depth.do?symbol=#{currency}_cny&size=50"
-        catch e
-            return pg.warn e.message
+do okex.init
 
-        pg.saveDepth currency, data.asks, data.bids
+pg.alignInterval 30, 0, () ->
+    return if not okex.connected
+
+    if okex.alive
+        okex.alive = false
+        do okex.ws.ping
+    else
+        do okex.ws.terminate

@@ -34,16 +34,12 @@ const drawables = [
     ("bitfinex", "etc")
 ]
 
-const exchanges = "okex", "huobi", "bitfinex"
-
-const coins = "bcc", "btc", "ltc", "eth", "etc"
-
 tradeable(ex, c1, c2) = (ex, c1, c2) in trade_pairs || (ex, c2, c1) in trade_pairs
 
 const cycles = let x = []
     for exchange in exchanges, coin in coins
-        function f(p, path=(), depth=5)
-            if !isempty(path) && p == car(path)
+        function f(p, path=(), depth=5, drawed=false) # cannot immediatly draw twice
+            if !isempty(path) && p == car(path) && length(path) > 2 && !(drawed && cadr(car(path)) == cadr(cadr(path)))
                 return push!(x, path)
             elseif depth <= 0
                 return
@@ -52,11 +48,11 @@ const cycles = let x = []
             npath = (path..., p)
             ndepth = depth - 1
 
-            if p in drawables
+            if !drawed && p in drawables
                 for nex in exchanges
                     np = nex, cadr(p)
                     if !(np in cdr(npath))
-                        f(np, npath, ndepth)
+                        f(np, npath, ndepth, true)
                     end
                 end
             end
@@ -72,5 +68,5 @@ const cycles = let x = []
         f((exchange, coin))
     end
 
-    filter(x->length(x)>1, x)
+    unique(Set, x)
 end
