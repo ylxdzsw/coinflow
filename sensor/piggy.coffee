@@ -63,8 +63,8 @@ module.exports = class PiggySensor
         n = now // time + 1
 
         await sleep time * n - now
-        shouldContinue = f n
-        @alignInterval sec, phase, f if shouldContinue isnt false
+        f n
+        @alignInterval sec, phase, f
 
     startHeartbeating: ->
         @alignInterval 10, 0, (n) =>
@@ -75,9 +75,10 @@ module.exports = class PiggySensor
         (channel, msg="") ->
             conn.publish channel, msg
 
-    yieldPrice: (currency, ask, bid) ->
+    yieldPrice: (pair, ask, bid) ->
+        pair = pair.replace /[_\-\.]/, ''
         db.multi()
-            .set "sensor/#{@name}.#{currency}.price.ask", JSON.stringify asks
-            .set "sensor/#{@name}.#{currency}.price.bid", JSON.stringify bids
+            .set "sensor/#{@name}.#{pair}.price.ask", ask
+            .set "sensor/#{@name}.#{pair}.price.bid", bid
             .exec throwerr
-        @notify "channel/#{@name}.#{currency}.price"
+        @notify "channel/#{@name}.#{pair}.price"

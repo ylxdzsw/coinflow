@@ -9,153 +9,70 @@ pg = new PiggySensor 'huobi'
 unzip = util.promisify zlib.unzip
 sleep = util.promisify setTimeout
 
-lastid = {}
-candle = {} # current candle time
-trades = btc: [], ltc: [], etc: [], eth: [] # all trades after candle time
-
 getid = do (c=0) -> () -> 'id'+c++
 
-ws =
-    wsnew: null
-    wsold: null
-    ch: {}
+pairs = ['ethbtc', 'ltcbtc', 'etcbtc', 'bccbtc']
 
-    register: (f) ->
-        id = do getid
-        do =>
-            await sleep 5000
-            if @ch[id]?
-                pg.warn "task #{id} timeout after 5s"
-                delete @ch[id]
-        @ch[id] = (args...) =>
-            delete @ch[id]
-            f(args...)
-        id
-
-    init_new: () ->
-        sock = new WebSocket('wss://be.huobi.com/ws')
-            .on 'message', (data) =>
-                data = JSON.parse await unzip data
-
-                switch
-                    when 'ping' of data
-                        sock.send JSON.stringify pong: data.ping
-                    when 'id' of data
-                        @ch[data.id]? data
-                    when 'ch' of data
-                        @ch[data.ch] data.tick
-                    else
-                        pg.warn "server send unknown message #{data}"
+huobi =
+    init_depth: () ->
+        @ws = new WebSocket('wss://api.huobi.pro/ws')
+            .on 'message', (msg) =>
+                @alive = true
+                data = JSON.parse await unzip msg
+                return @ws.send JSON.stringify pong: data.ping if 'ping' of data
+                @update_depth m[1], data.tick.asks, data.tick.bids if m = data.ch?.match /market.(\w{6}).depth.step1/ # step1 precision: 5 digits after dot
 
             .on 'open', () =>
-                pg.info "web socket connected: be.huobi.com"
-                @wsnew = sock
-                ['etc', 'eth'].forEach (currency) =>
-                    id = @register ({status}) -> pg.warn "subscription failed" if status is 'error'
-                    sock.send JSON.stringify sub: "market.#{currency}cny.depth.step0", id: id
-                    @ch["market.#{currency}cny.depth.step0"] = (data) ->
-                        pg.saveDepth currency, data.asks, data.bids
+                pg.info "web socket connected"
+                @connected = @alive = true
+                pairs.forEach (pair) =>
+                    @ws.send JSON.stringify sub: "market.#{pair}.depth.step1", id: do getid
 
             .on 'close', (e) =>
-                pg.info "web socket to be.huobi.com closed: #{e}, reconnect."
-                @wsnew = null
+                pg.info "web socket closed: #{e}, reconnecting"
+                @connected = false
                 await sleep 1000
-                do @init_new
+                do @init
 
-    init_old: () ->
-        sock = new WebSocket('wss://api.huobi.com/ws')
-            .on 'message', (data) =>
-                data = JSON.parse await unzip data
+    update_depth: (pair, asks, bids) ->
+        return if not @vol?[pair]?
 
-                switch
-                    when 'ping' of data
-                        sock.send JSON.stringify pong: data.ping
-                    when 'id' of data
-                        @ch[data.id]? data
-                    when 'ch' of data
-                        @ch[data.ch] data.tick
-                    else
-                        pg.warn "server send unknown message #{data}"
+        find_price = (amount, list) ->
+            i = 0
 
-            .on 'open', () =>
-                pg.info "web socket connected: api.huobi.com"
-                @wsold = sock
-                ['btc', 'ltc'].forEach (currency) =>
-                    id = @register ({status}) -> pg.warn "subscription failed" if status is 'error'
-                    sock.send JSON.stringify sub: "market.#{currency}cny.depth.step0", id: id
-                    @ch["market.#{currency}cny.depth.step0"] = (data) ->
-                        pg.saveDepth currency, data.asks, data.bids
+            while i < list.length && amount >= 0
+                amount -= list[i++][1]
 
-            .on 'close', (e) =>
-                pg.info "web socket to api.huobi.com closed: #{e}, reconnect."
-                @wsold = null
-                await sleep 1000
-                do @init_old
+            list[i-1][0]
 
-    query: (currency, retry=4) ->
-        new Promise (resolve, reject) =>
-            if retry < 0
-                pg.warn "web socket broken"
-                return reject new Error "web socket broken"
+        ask = find_price @vol[pair], asks.sort (x, y) -> x[0] - y[0]
+        bid = find_price @vol[pair], bids.sort (x, y) -> y[0] - x[0]
 
-            sock = if currency in ['etc', 'eth'] then @wsnew else @wsold
+        pg.yieldPrice pair, ask, bid
 
-            if sock?
-                id = @register resolve
-                sock.send JSON.stringify req: "market.#{currency}cny.trade.detail", id: id
-            else
-                await sleep 400
-                @query currency, retry - 1
-                    .then resolve
-                    .catch reject
+    init_kline: () ->
+        @vol = {}
+        do huobi.sync_kline
 
-['btc', 'ltc', 'etc', 'eth'].forEach (currency, i) ->
-    pg.alignInterval 15, i, ->
-        data = await ws.query currency
+        pg.alignInterval 300, 5, () ->
+            do huobi.sync_kline
 
-        return pg.warn "huobi responds error: #{JSON.strinify data}" if data.status is 'error'
+    sync_kline: () ->
+        pairs.forEach (pair) =>
+            candles = await pg.get "https://api.huobi.pro/market/history/kline?symbol=#{pair}&period=5min&size=865"
+            v = candles.data.sort (x, y) -> y.id - x.id
+                            .map (x) -> parseFloat x.amount
+            base = v.reduce (x, y) -> x + y
+            crit = 3*v[0] + 2*v[1] + 2*v[2] + v[3] + v[4] + v[5] + v[287] + 2*v[288] + v[289] + v[575] + 2*v[576] + v[577] + 2*v[864]
+            @vol[pair] = 0.5 * (base / 1000 + crit / 20)
 
-        batch = data.data
+do huobi.init_depth
+do huobi.init_kline
 
-        if not lastid[currency]?
-            lowest = (batch.sort (x,y) -> x.id - y.id)[0]
-            lastSync = await pg.getLastSync currency
+pg.alignInterval 10, 0, () ->
+    return if not huobi.connected
 
-            if lastSync?
-                {id, n} = JSON.parse lastSync
-
-                if lowest.id <= id + 1
-                    candle[currency] = n + 1
-                    lastid[currency] = id
-
-            if not lastid[currency]?
-                n = pg.candleTime lowest.ts
-                candle[currency] = n + 1
-                lastid[currency] = (x.id for x in batch when pg.candleTime(x.ts) is n).sort().pop()
-
-        if (batch.some (x) -> x.id <= lastid[currency])
-            batch = batch.filter (x) -> x.id > lastid[currency]
-            return if batch.length is 0
-        else
-            pg.warn "huobi #{currency} #{candle[currency]} some data lost"
-            lowest = (batch.sort (x,y) -> x.id - y.id)[0]
-            candle[currency] = 1 + pg.candleTime lowest.ts
-
-        trades[currency] = trades[currency].concat batch
-        lastid[currency] = (x.id for x in batch).sort().pop()
-
-        period = pg.secondTime candle[currency] + 1
-
-        if (batch.some (x) -> x.ts >= period)
-            candleTrades = trades[currency].filter (x) -> pg.candleTime(x.ts) is candle[currency]
-
-            if candleTrades.length > 0
-                latest = (x.id for x in candleTrades).sort().pop()
-                pg.saveCandle currency, pg.createCandle candleTrades, candle[currency]
-                pg.setLastSync currency, id: latest, n: candle[currency]
-
-            trades[currency] = trades[currency].filter (x) -> x.ts >= period
-            candle[currency] += 1
-
-do ws.init_new
-do ws.init_old
+    if huobi.alive
+        huobi.alive = false
+    else
+        do huobi.ws.terminate
