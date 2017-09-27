@@ -11,7 +11,7 @@ okex =
         @ws = new WebSocket('wss://real.okex.com:10441/websocket')
             .on 'message', (msg) =>
                 @alive = true
-                return if msg == '{"event":"pong"}'
+                return if msg is '{"event":"pong"}'
 
                 [{channel, data}] = JSON.parse msg
 
@@ -54,6 +54,7 @@ okex =
 
         ask = find_price @vol[pair], asks.sort (x, y) -> x[0] - y[0]
         bid = find_price @vol[pair], bids.sort (x, y) -> y[0] - x[0]
+        pair = pair.replace '_', ''
 
         pg.yieldPrice pair, ask, bid
 

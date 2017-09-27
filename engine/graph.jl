@@ -23,6 +23,7 @@ const drawables = [
     ("okex", "ltc"),
     ("okex", "eth"),
     ("okex", "etc"),
+    ("okex", "bcc"),
 
     ("huobi", "bcc"),
     ("huobi", "eth"),

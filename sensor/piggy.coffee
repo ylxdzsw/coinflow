@@ -76,7 +76,6 @@ module.exports = class PiggySensor
             conn.publish channel, msg
 
     yieldPrice: (pair, ask, bid) ->
-        pair = pair.replace /[_\-\.]/, ''
         db.multi()
             .set "sensor/#{@name}.#{pair}.price.ask", ask
             .set "sensor/#{@name}.#{pair}.price.bid", bid
