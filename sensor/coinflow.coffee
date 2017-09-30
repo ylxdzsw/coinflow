@@ -4,13 +4,13 @@ http  = require 'http'
 https = require 'https'
 redis = require 'redis'
 
-dir   = "/var/piggy"
+dir   = "/var/coinflow"
 db    = redis.createClient db: 1
 sleep = util.promisify setTimeout
 
 throwerr = (err) -> console.error err if err?
 
-module.exports = class PiggySensor
+module.exports = class Sensor
     constructor: (@name) ->
         do @startHeartbeating
 

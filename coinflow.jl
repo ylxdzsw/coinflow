@@ -7,7 +7,7 @@ using OhMyJulia
 const conn = RedisConnection(db=1)
 
 "flush redis db 1 and import configures from file"
-@main function init(conf="/etc/piggy.conf")
+@main function init(conf="/etc/coinflow.conf")
     # exec(conn, "flushdb")
     for line in eachline(conf) @when !startswith(line, '#') && '=' in line
         key, value = strip.(split(line, '='))

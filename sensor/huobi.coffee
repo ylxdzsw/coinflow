@@ -1,10 +1,10 @@
-PiggySensor = require './piggy'
-WebSocket   = require 'ws'
+Sensor    = require './coinflow'
+WebSocket = require 'ws'
 
 util = require 'util'
 zlib = require 'zlib'
 
-pg = new PiggySensor 'huobi'
+cf = new Sensor 'huobi'
 
 unzip = util.promisify zlib.unzip
 sleep = util.promisify setTimeout
@@ -23,16 +23,16 @@ huobi =
                 @update_depth m[1], data.tick.asks, data.tick.bids if m = data.ch?.match /market.(\w{6}).depth.step1/ # step1 precision: 5 digits after dot
 
             .on 'open', () =>
-                pg.info "web socket connected"
+                cf.info "web socket connected"
                 @connected = @alive = true
                 pairs.forEach (pair) =>
                     @ws.send JSON.stringify sub: "market.#{pair}.depth.step1", id: do getid
 
             .on 'close', (e) =>
-                pg.info "web socket closed: #{e}, reconnecting"
+                cf.info "web socket closed: #{e}, reconnecting"
                 @connected = false
                 await sleep 1000
-                do @init
+                do @init_depth
 
     update_depth: (pair, asks, bids) ->
         return if not @vol?[pair]?
@@ -48,18 +48,18 @@ huobi =
         ask = find_price @vol[pair], asks.sort (x, y) -> x[0] - y[0]
         bid = find_price @vol[pair], bids.sort (x, y) -> y[0] - x[0]
 
-        pg.yieldPrice pair, ask, bid
+        cf.yieldPrice pair, ask, bid
 
     init_kline: () ->
         @vol = {}
         do huobi.sync_kline
 
-        pg.alignInterval 300, 5, () ->
+        cf.alignInterval 300, 5, () ->
             do huobi.sync_kline
 
     sync_kline: () ->
         pairs.forEach (pair) =>
-            candles = await pg.get "https://api.huobi.pro/market/history/kline?symbol=#{pair}&period=5min&size=865"
+            candles = await cf.get "https://api.huobi.pro/market/history/kline?symbol=#{pair}&period=5min&size=865"
             v = candles.data.sort (x, y) -> y.id - x.id
                             .map (x) -> parseFloat x.amount
             base = v.reduce (x, y) -> x + y
@@ -69,7 +69,7 @@ huobi =
 do huobi.init_depth
 do huobi.init_kline
 
-pg.alignInterval 10, 0, () ->
+cf.alignInterval 10, 0, () ->
     return if not huobi.connected
 
     if huobi.alive

@@ -1,10 +1,10 @@
-PiggySensor = require './piggy'
-WebSocket   = require 'ws'
+Sensor    = require './coinflow'
+WebSocket = require 'ws'
 
 util = require 'util'
 sleep = util.promisify setTimeout
 
-pg = new PiggySensor 'bitfinex'
+cf = new Sensor 'bitfinex'
 
 bitfinex =
     init_depth: () ->
@@ -26,16 +26,23 @@ bitfinex =
                         @update_depth id, data if data isnt 'hb'
 
             .on 'open', () =>
-                pg.info "web socket connected"
+                cf.info "web socket connected"
                 @connected = @alive = true
                 ['tBTCUSD','tLTCUSD','tLTCBTC','tETHUSD','tETHBTC','tETCUSD','tETCBTC'].forEach (pair) =>
                     @ws.send JSON.stringify event: 'subscribe', channel: 'book', symbol: pair, prec: 'P1', freq: 'F1'
 
             .on 'close', (e) =>
-                pg.info "web socket closed: #{e}, reconnecting"
+                cf.info "web socket closed: #{e}, reconnecting"
                 @connected = false
                 await sleep 1000
                 do @init_depth
+
+            .on 'error', (e) =>
+                if e.message.includes '403'
+                    await sleep 200
+                    do @init_depth
+                else
+                    throw e
 
     update_depth: (id, data) ->
         if data[0].length # snapshot
@@ -43,7 +50,7 @@ bitfinex =
                 @update_depth id, x
         else
             if @last isnt id
-                @yield_price @last if @last?
+                @yield_price @last if @last of @book
 
             [price, count, amount] = data
 
@@ -79,18 +86,18 @@ bitfinex =
         ask = find_price @vol[symbol], asks.sort (x, y) -> x[0] - y[0]
         bid = find_price @vol[symbol], bids.sort (x, y) -> y[0] - x[0]
 
-        pg.yieldPrice pair, ask, bid
+        cf.yieldPrice pair, ask, bid
 
     init_kline: () ->
         @vol = {}
         do bitfinex.sync_kline
 
-        pg.alignInterval 300, 5, () ->
+        cf.alignInterval 300, 5, () ->
             do bitfinex.sync_kline
 
     sync_kline: () ->
         ['tBTCUSD','tLTCUSD','tLTCBTC','tETHUSD','tETHBTC','tETCUSD','tETCBTC'].forEach (pair) =>
-            candles = await pg.get "https://api.bitfinex.com/v2/candles/trade:5m:#{pair}/hist?limit=865"
+            candles = await cf.get "https://api.bitfinex.com/v2/candles/trade:5m:#{pair}/hist?limit=865"
             v = candles.sort (x, y) -> y[0] - x[0]
                        .map (x) -> x[5]
             base = v.reduce (x, y) -> x + y
@@ -100,7 +107,7 @@ bitfinex =
 do bitfinex.init_depth
 do bitfinex.init_kline
 
-pg.alignInterval 10, 0, () ->
+cf.alignInterval 10, 0, () ->
     return if not bitfinex.connected
 
     if bitfinex.alive
