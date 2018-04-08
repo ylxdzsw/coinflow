@@ -1,0 +1,34 @@
+#!/usr/bin/env julia
+
+using Fire
+using RedisAlchemy
+using OhMyJulia
+
+const conn = RedisConnection(db=1)
+
+if !haskey(ENV, "COINFLOW_HOME")
+    error("Evironment variable COINFLOW_HOME not set")
+end
+
+"flush redis db 1 and import configures from file"
+@main function init(conf="$(ENV["COINFLOW_HOME"])/coinflow.conf")
+    exec(conn, "flushdb")
+    for line in eachline(conf) @when !startswith(line, '#') && '=' in line
+        key, value = strip.(split(line, '='))
+        exec(conn, "set", "config/$key", value)
+    end
+end
+
+@main function start(service)
+    if service == "sensors"
+        # @sync for file in ("okex.coffee", "huobi.coffee", "bitfinex.coffee")
+        #     @async run(`coffee sensor/$file`)
+        # end
+    elseif service == "console"
+        file = rel"console/server.jl"
+        cmd = detach(`julia $file`)
+        spawn(cmd)
+    else
+        println(STDERR, "unknown service $service")
+    end
+end

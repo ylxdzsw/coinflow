@@ -4,24 +4,37 @@ http  = require 'http'
 https = require 'https'
 redis = require 'redis'
 
-dir   = "/var/coinflow"
+pid   = process.pid
+dir   = process.env.COINFLOW_HOME
 db    = redis.createClient db: 1
 sleep = util.promisify setTimeout
 
-throwerr = (err) -> console.error err if err?
+throwerr = (err) -> throw err if err?
 
 module.exports = class Sensor
     constructor: (@name) ->
+        @logfile = fs.openSync "#{dir}/#{@name}.sensor.log", "a"
+
+        process.on 'uncaughtException', (err) =>
+            @log 'warn', if (err && err.stack) then err.stack else err
+
+        db.on 'error', (err) =>
+            @log 'warn', err
+
         do @startHeartbeating
 
-    info: (msg) ->
+    log: (level, msg) ->
+        if level in ['info', 'warn', 'notif']
+            db.rpush "log/#{@name}.sensor", "#{level} #{msg}"
+            db.rpush "notif/#{@name}.sensor", msg if level is 'notif'
         time = (new Date).toISOString().match(/(.*)T(.*)\./)
-        fs.appendFile "#{dir}/sensor.log", "#{time[1]} #{time[2]} #{msg}\n", throwerr
-        console.error time[2], msg
+        @logfile.write "#{time[1]} #{time[2]} #{level}: #{msg}\n", throwerr
 
     get: (url, attempt=2, proto=if url.startsWith 'https' then https else http) ->
         new Promise (resolve, reject) =>
             retry = (msg) =>
+                @log 'debug', msg
+
                 await sleep 200
                 @get url, attempt - 1, proto
                     .then resolve
@@ -35,7 +48,7 @@ module.exports = class Sensor
                     else if attempt > 0
                         retry "Request failed with status #{res.statusCode}, retrying"
                     else
-                        @info "request to #{url} failed 3 times, giving up"
+                        @log 'warn', "request to #{url} failed 3 times, giving up"
                         reject new Error "Request failed with status #{res.statusCode}"
 
                 data = ""
@@ -48,13 +61,13 @@ module.exports = class Sensor
                         if attempt > 0
                             retry "Request failed with invalid JSON response, retrying"
                         else
-                            @info "request to #{url} failed 3 times, giving up"
+                            @log 'warn', "request to #{url} failed 3 times, giving up"
                             reject new Error "Request failed with invalid JSON response #{data}"
             .on 'error', (e) =>
                 if attempt > 0
                     retry "request failed: #{e.message}, retrying"
                 else
-                    @info "request to #{url} failed 3 times, giving up"
+                    @log 'warn', "request to #{url} failed 3 times, giving up"
                     reject e
 
     alignInterval: (sec, phase, f) ->
@@ -67,17 +80,20 @@ module.exports = class Sensor
         @alignInterval sec, phase, f
 
     startHeartbeating: ->
-        @alignInterval 10, 0, (n) =>
-            db.set "status/#{@name}.alive", n, 'EX', 25
+        @alignInterval 5, 0, () =>
+            db.set "status/#{@name}.pid", pid, 'EX', 12
 
     notify: do ->
         conn = do redis.createClient
+        conn.on 'error', (err) => @log 'warn', err
         (channel, msg="") ->
             conn.publish channel, msg
 
     yieldPrice: (pair, ask, bid) ->
+        @log 'data', JSON.stringify { pair, ask, bid }
         db.multi()
-            .set "sensor/#{@name}.#{pair}.price.ask", ask
-            .set "sensor/#{@name}.#{pair}.price.bid", bid
+            .set "market/#{@name}.#{pair}.price.ask", ask, 'EX', 15
+            .set "market/#{@name}.#{pair}.price.bid", bid, 'EX', 15
             .exec throwerr
         @notify "channel/#{@name}.#{pair}.price"
+        db.rpush 'data/order_price', { pair, ask, bid, time: Date.now() // 1000, exchange: @name }
